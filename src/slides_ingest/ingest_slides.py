@@ -1,13 +1,17 @@
+import logging
+import os
+import pandas as pd
+import re 
 from typing import List, Optional, Union, Tuple
 
-import logging
+from tqdm import tqdm
 from pptx import Presentation
+
 from transformers import pipeline
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 log = logging.getLogger()
-
 
 class SlidesIngest:
     """
@@ -15,17 +19,20 @@ class SlidesIngest:
     """
     def __init__(
         self, 
-        pp_file_loc: str
+        pp_filename: str
         ):
         """
-        :param pp_file_loc: PowerPoint file location
+        :param pp_filename: PowerPoint file location
         """
-        self.pp_file_loc = pp_file_loc
+        self.pp_filename = pp_filename
         
-        self.short_sum = None
+        self.base_path = '/Users/anson/Downloads'
+        self.filepath = os.path.join(self.base_path, self.pp_filename)
+        
         self.long_sum = None
         
         self.prs = None
+        self.all_slides_text = None
         self.slide_content = None
         self.slide_summary = None
 
@@ -35,8 +42,7 @@ class SlidesIngest:
         """
         log.info('Initialisiing hugging face summary tools')
         
-        self.short_sum = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
-        self.long_sum = pipeline("summarization", model="facebook/bart-large-cnn")
+        self.long_sum = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
     
     @staticmethod
     def calc_min_max_tokens(
@@ -56,10 +62,10 @@ class SlidesIngest:
         """
         Function to load PowerPoint file and extract content.
         """
-        log.info(f'Loading PowerPoint file: {self.pp_file_loc}')
+        log.info(f'Loading PowerPoint file: {self.filepath}')
         
         self.slide_content = {}
-        self.prs = Presentation(self.pp_file_loc)
+        self.prs = Presentation(self.filepath)
 
         log.info(f'PowerPoint total slide count: {len(self.prs.slides)}')
         
@@ -75,10 +81,12 @@ class SlidesIngest:
 
     def get_slide_text(
         self,
+        slide_mapped: bool,
         n_slides: Optional[Union[int, List[int]]] = None
     ) -> str:
         """
         Function to get slides from all or a specific set of slides 
+        :param slide_mapped: Option to show which summary is from which slide
         :param n_slides: slide selection range, if None will get all
         :return all_slide_text: text from slide
         """
@@ -89,10 +97,7 @@ class SlidesIngest:
         n_slides = n_slides if n_slides else [n for n in range(len(self.prs.slides))]
         n_slides = [n_slides] if isinstance(n_slides, int) else n_slides
 
-        if all_slides: 
-            all_slide_text = '\n'.join([self.slide_content[n] for n in n_slides])
-        else:
-            all_slide_text = '\n'.join([f"Slide {n + 1}: {self.slide_content[n]}" for n in n_slides])
+        all_slide_text = f'. '.join([f'{f"Slide {n + 1}: " if slide_mapped else ""} {self.slide_content[n]}' for n in n_slides if self.slide_content[n]])
 
         return all_slide_text
 
@@ -119,7 +124,7 @@ class SlidesIngest:
                 if input_length != 0:
                     min_length, max_length = self.calc_min_max_tokens(input_length=input_length)
                     
-                    pp_summary = self.short_sum(
+                    pp_summary = self.long_sum(
                         slide_info, 
                         max_length=max_length, 
                         min_length=min_length, 
@@ -148,23 +153,23 @@ class SlidesIngest:
         """
         log.info('Summarising all slides')
 
-        all_slides_text = self.get_slide_text()
-        input_length = len(all_slides_text.split())
+        self.all_slides_text = self.get_slide_text(slide_mapped=False)
+        input_length = len(self.all_slides_text.split())
 
         # Check if text exceeds token limit
         if input_length > 1024:
             log.info("Splitting text into smaller chunks due to token length limit")
-            text_chunks = self.split_text_chunks(all_slides_text)
+            text_chunks = self.split_text_chunks(self.all_slides_text)
             chunk_summaries = []
             
             n_chunk = 1
 
-            for chunk in text_chunks:
-                log.info(f'summarising chunk {n_chunk} of total {len(text_chunks)}')
+            for chunk in tqdm(text_chunks, leave=True):
+                log.info(f'Summarising chunk {n_chunk} of total {len(text_chunks)}')
                 n_chunk += 1
                 
                 min_length, max_length = self.calc_min_max_tokens(input_length=len(chunk.split()))
-                summary = self.short_sum(
+                summary = self.long_sum(
                     chunk,
                     max_length=max_length,
                     min_length=min_length,
@@ -174,18 +179,72 @@ class SlidesIngest:
             
             combined_text = " ".join(chunk_summaries)
             
-            self.slide_summary['all'] = combined_text
+            self.slide_summary = combined_text
         else:
             # Summarize directly if within token limit
             min_length, max_length = self.calc_min_max_tokens(input_length=input_length)
-            pp_summary = self.short_sum(
-                all_slides_text,
+            pp_summary = self.long_sum(
+                self.all_slides_text,
                 max_length=max_length,
                 min_length=min_length,
                 do_sample=False
             )
             self.slide_summary['all'] = pp_summary[0]['summary_text']
     
+    def get_references(self) -> None:
+        """
+        Function to get all references from slides
+        """
+        references_patterns = [
+            r'\b([A-Z][a-z]+ et al\.,? \(\d{4}\))',             # Pattern for "Name et al. (yyyy)"
+            r'\b([A-Z][a-z]+(?: and [A-Z][a-z]+)? \(\d{4}\))',  # Pattern for "Name (yyyy)" or "Name and Name (yyyy)"
+            r'\(([A-Z][a-z]+(?: and [A-Z][a-z]+)?, \d{4})\)'    # Pattern for "(Name and Name, yyyy)" or "(Name, yyyy)"
+        ]
+        
+        for pattern in references_patterns:
+            references = re.findall(pattern, self.all_slides_text)
+            
+            if references:
+                self.format_references(references)
+        
+        self.references_df = self.references_df.groupby('Slide').agg(list)
+
+    def format_references(self, references: List[str]) -> None:
+        """
+        Function to format references and locate which slide it was presented
+        :param references: list of references found
+        """
+        self.reference_df = pd.DataFrame(columns=['Slide', 'References'])
+        
+        for reference in references:
+            for slide_n, slide_text in self.slide_content.items():
+                if reference in slide_text:
+                    self.references_df = pd.concat([self.references_df, pd.DataFrame({'Slide': [slide_n], 'References': [reference]})], ignore_index=True).reset_index(drop=True)
+            
+            if reference not in self.references_df['References'].unique():
+                self.references_df = pd.concat([self.references_df, pd.DataFrame({'Slide': ['No slide number found'], 'References': [reference]})], ignore_index=True).reset_index(drop=True)
+    
+    def display_summary(self) -> None:
+        """
+        Function to display summarisation in terminal
+        """
+        sum_list = [point for point in self.slide_summary.split(' . ')]
+        
+        print('-------------------- SUMMARISATION START --------------------')
+        for n_point, point in enumerate(sum_list, start=1):
+            print(f'{n_point}. {point}')
+        print('--------------------- SUMMARISATION END ---------------------')
+        
+    def save_summarisation(self) -> None:
+        """
+        Function to save summarisation to documents
+        """
+        raise NotImplementedError()
+        # save_filename = f'{self.pp_filename.split('.')[0]}.csv'
+        # save_loc = os.path.join(self.base_path, save_filename)
+        # log.info(f'Saving summarisation: {save_loc}')
+        
+        
     def summarise_runner(self) -> None: 
         """
         Sub-runner function for all summarisation processes
@@ -193,20 +252,37 @@ class SlidesIngest:
         # self.summarise_per_slide()
         self.summarise_all()
         
-    def runner(self) -> None:
+    def runner(
+        self,
+        save=True,
+        display: bool = False
+        ) -> None:
         """
-        Main runner function.
+        Main runner function
+        :param save: Option to save to csv
+        :param display: Option to display summarisations
         """
-        log.info(f'Starting PowerPoint summarisation on file {self.pp_file_loc}')
+        log.info(f'Starting PowerPoint summarisation on file: {self.pp_filename}')
         
         self.init_summarisers()
         self.load_file()
         
         self.summarise_runner()
+        self.get_references()
+        
+        if display:
+            self.display_summary()
+        
+        if save: 
+            self.save_summarisation()
         
         log.info('Summarisation Complete')
 
 if __name__ == '__main__':
-    slides = SlidesIngest(pp_file_loc='/Users/anson/Downloads/Lecture 10 Aggression 1 2020.pptx')
-    slides.runner()
+    slides = SlidesIngest(pp_filename='Week 4 - The Social Self Slides.pptx')
+    
+    slides.runner(
+        save=False, 
+        display=True
+        )
     
