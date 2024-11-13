@@ -26,7 +26,7 @@ class SlidesIngest:
         """
         self.pp_filename = pp_filename
         
-        self.base_path = '/Users/anson/Downloads'
+        self.base_path = '/Users/ansonliu/Downloads'
         self.filepath = os.path.join(self.base_path, self.pp_filename)
         
         self.long_sum = None
@@ -35,6 +35,8 @@ class SlidesIngest:
         self.all_slides_text = None
         self.slide_content = None
         self.slide_summary = None
+
+        self.references_df = None
 
     def init_summarisers(self) -> None:
         """
@@ -195,10 +197,15 @@ class SlidesIngest:
         """
         Function to get all references from slides
         """
+        log.info('Extracting references')
+
         references_patterns = [
-            r'\b([A-Z][a-z]+ et al\.,? \(\d{4}\))',             # Pattern for "Name et al. (yyyy)"
-            r'\b([A-Z][a-z]+(?: and [A-Z][a-z]+)? \(\d{4}\))',  # Pattern for "Name (yyyy)" or "Name and Name (yyyy)"
-            r'\(([A-Z][a-z]+(?: and [A-Z][a-z]+)?, \d{4})\)'    # Pattern for "(Name and Name, yyyy)" or "(Name, yyyy)"
+            r'([A-Za-z]+ \(\d{4}\))',                     # Pattern for "Name (yyyy)"
+            r'\(([A-Za-z]+, \d{4})\)',   # Pattern for "(Name, yyyy)" 
+            r'([A-Za-z]+ and [A-Za-z]+ \(\d{4}\))',  # Pattern for "Name and Name (yyyy)" 
+            r'\(([A-Za-z]+ and [A-Za-z]+, \d{4}\))',  # Pattern for "(Name and Name, yyyy)" 
+            r'([A-Za-z]+ et al\., \(\d{4}\))',  # Pattern for Name et al. (yyyy)
+            r'\((A-Za-z]+ et al\., yyyy\))'  # Pattern for (Name et al., yyyy)
         ]
         
         for pattern in references_patterns:
@@ -214,7 +221,7 @@ class SlidesIngest:
         Function to format references and locate which slide it was presented
         :param references: list of references found
         """
-        self.reference_df = pd.DataFrame(columns=['Slide', 'References'])
+        self.references_df = pd.DataFrame(columns=['Slide', 'References'])
         
         for reference in references:
             for slide_n, slide_text in self.slide_content.items():
