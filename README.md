@@ -10,11 +10,11 @@ Flexible Output Options: Allows display in the console or saving to a file.
 Getting Started
 
 Prerequisites
-Python 3.7 or later
+Python 3.9 or later
 Required Python packages (install via requirements.txt)
 Installation
 Clone the repository:
-git clone https://github.com/yourusername/powerpoint-ingestion-tool.git
+git clone https://github.com/AnsonLiu01/slides_chat.git
 cd powerpoint-ingestion-tool
 Install dependencies:
 pip install -r requirements.txt
@@ -42,7 +42,5 @@ Here’s an example of how to use the tool in main.py:
 Output
 If display=True, the summary will appear in the console. If save=True, it will save to a specified file path.
 
-Contributing
-
-Contributions are welcome! Please feel free to submit issues, suggestions, or pull requests.
-
+Contributors
+Anson (I is lonely, meow meow meow meow)
