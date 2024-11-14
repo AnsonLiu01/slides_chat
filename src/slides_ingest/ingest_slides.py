@@ -46,7 +46,8 @@ class SlidesIngest:
         """
         log.info('Initialisiing hugging face summary tools')
         
-        self.long_sum = pipeline('summarization', model='facebook/bart-large-cnn')  # 'sshleifer/distilbart-cnn-12-6'
+        # self.long_sum = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+        self.long_sum = pipeline('summarization', model='facebook/bart-large-cnn')
     
     @staticmethod
     def calc_min_max_tokens(
@@ -129,7 +130,7 @@ class SlidesIngest:
         input_length = len(self.all_slides_text.split())
 
         # Check if text exceeds token limit
-        if input_length > 1024:
+        if input_length > 200:
             log.info("Splitting text into smaller chunks due to token limit")
             text_chunks = self.split_text_chunks(self.all_slides_text)
             chunk_summaries = []
