@@ -1,12 +1,12 @@
-from datetime import datetime
 import logging
 import os
-import pandas as pd
-import re 
-from typing import List, Optional, Union, Tuple
+import re
+from datetime import datetime
+from typing import List, Optional, Tuple, Union
 
-from tqdm import tqdm
+import pandas as pd
 from pptx import Presentation
+from tqdm import tqdm
 
 from transformers import pipeline
 
@@ -29,7 +29,7 @@ class SlidesIngest:
         
         self.base_path = '/Users/ansonliu/Downloads'
         self.filepath = os.path.join(self.base_path, self.pp_filename)
-        self.today = datetime.today().strftime('%d-%M-%Y')
+        self.today = datetime.today().strftime('%d-%m-%Y')
         
         self.long_sum = None
         
@@ -46,7 +46,7 @@ class SlidesIngest:
         """
         log.info('Initialisiing hugging face summary tools')
         
-        self.long_sum = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+        self.long_sum = pipeline('summarization', model='facebook/bart-large-cnn')  # 'sshleifer/distilbart-cnn-12-6'
     
     @staticmethod
     def calc_min_max_tokens(
@@ -58,7 +58,7 @@ class SlidesIngest:
         :return: min and max token values
         """
         min_length = max(1, int(input_length * 0.1))
-        max_length = max(5, min(input_length // 1.5, 200))
+        max_length = max(5, min(input_length // 1.25, 200))
 
         return min_length, max_length
 
@@ -205,7 +205,7 @@ class SlidesIngest:
         """
         Function to display summarisation in terminal
         """
-        sum_list = [point for point in self.slide_summary.split(' . ')]
+        sum_list = [point for point in self.slide_summary.split('. ')]
         
         print('-------------------- SUMMARISATION START --------------------')
         for n_point, point in enumerate(sum_list, start=1):
