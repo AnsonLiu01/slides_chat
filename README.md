@@ -1,4 +1,4 @@
-PowerPoint Slide Ingestion and Summarization Tool
+PowerPoint Slide Ingestion and Summarization Tool (A WORK IN PROGRESS)
 
 This repository contains a tool for ingesting PowerPoint slides and generating concise summaries. It leverages NLP techniques to extract key insights from slide content, making it ideal for quick reviews and analysis.
 
@@ -43,4 +43,4 @@ Output
 If display=True, the summary will appear in the console. If save=True, it will save to a specified file path.
 
 Contributors
-Anson (I is lonely, meow meow meow meow)
+Anson
